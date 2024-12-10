@@ -1,9 +1,8 @@
 import { Octokit } from "@octokit/rest";
-const octokit = new Octokit({auth: env.GITHUB_TOKEN});
 const REPO_OWNER = 'AINovelist';
 const REPO_NAME = 'stories';
 const ROOT_FOLDER = 'kids';
-const PER_PAGE = 10; // Default pagination limit
+const PER_PAGE = 100; // Default pagination limit
 const topicMap = [
   { name: "Air Pollution Reduction", slug: "air_pollution_reduction", folder: "Air Pollution Reduction" },
   { name: "Animal Protection", slug: "animal_protection", folder: "Animal Protection" },
@@ -30,13 +29,17 @@ function generateImageList(fileName) {
   }, {});
 }
 
-async function listFilesInTopic(topicSlug) {
+async function listFilesInTopic(octokit, topicSlug, env) {
   const topic = topicMap.find((t) => t.slug === topicSlug);
+  if (!topic) {
+    throw new Error(`Topic not found for slug: ${topic}`);
+  }
   const folderPath = `${ROOT_FOLDER}/${topic.folder}/fa`;
   const response = await octokit.repos.getContent({
     owner: REPO_OWNER,
     repo: REPO_NAME,
     path: folderPath,
+    auth: env.GITHUB_TOKEN,
   });
 
   return response.data.map((item) => ({
@@ -47,17 +50,18 @@ async function listFilesInTopic(topicSlug) {
   }));
 }
 
-async function getTopics() {
+async function getTopics(env) {
   return topicMap;
 }
 
-async function getContentByTopicAndFile(topicSlug, fileName) {
+async function getContentByTopicAndFile(octokit, topicSlug, fileName, env) {
   const topic = topicMap.find((t) => t.slug === topicSlug);
   const folderPath = `${ROOT_FOLDER}/${topic.folder}/fa/${fileName}.md`;
   const response = await octokit.repos.getContent({
     owner: REPO_OWNER,
     repo: REPO_NAME,
     path: folderPath,
+    auth: env.GITHUB_TOKEN,
   });
 
   const content = atob(response.data.content);
@@ -66,16 +70,17 @@ async function getContentByTopicAndFile(topicSlug, fileName) {
   return { content, images };
 }
 
-async function searchFiles(keyword) {
+async function searchFiles(octokit, keyword, env) {
   const response = await octokit.search.code({
     q: `${keyword} in:file extension:md repo:${REPO_OWNER}/${REPO_NAME}`,
-    per_page: 100, // Increase limit for search results
+    per_page: PER_PAGE, // Increase limit for search results
+    auth: env.GITHUB_TOKEN,
   });
 
   return response.data.items.map((item) => ({
     name: item.name,
     path: item.path,
-    download_url: item.html_url.replace('/blob/', '/raw/'),
+    download_url: item.html_url.replace('/blob/', '/raw/'),    
   }));
 }
 
@@ -83,12 +88,12 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const { pathname, searchParams } = url;
-
+    const octokit = new Octokit({ auth: env.GITHUB_TOKEN });
     try {
       if (pathname === '/') {
         const files = [];
         for (const topic of topicMap) {
-          const topicFiles = await listFilesInTopic(topic.slug);
+          const topicFiles = await listFilesInTopic(octokit, topic.slug, env);
           files.push(...topicFiles.map((file) => ({ ...file, topic: topic.name, topicSlug: topic.slug })));
         }
         return new Response(JSON.stringify(files), {
