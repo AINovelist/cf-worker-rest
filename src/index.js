@@ -121,7 +121,7 @@ export default {
         // Check if there's a file name in the path
         if (parts.length === 4) {
           const fileName = parts[3];
-          const { content, images } = await getContentByTopicAndFile(topicSlug, fileName);
+          const { content, images } = await getContentByTopicAndFile(octokit, topicSlug, fileName, env);
           return new Response(JSON.stringify({ content, images }), {
             headers: {
               'Content-Type': 'application/json',
