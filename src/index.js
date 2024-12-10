@@ -64,7 +64,8 @@ async function getContentByTopicAndFile(octokit, topicSlug, fileName, env) {
     auth: env.GITHUB_TOKEN,
   });
 
-  const content = atob(response.data.content);
+  // const content = atob(response.data.content);
+  const content = decodeURIComponent(escape(atob(response.data.content)))
   const images = generateImageList(fileName);
 
   return { content, images };
