@@ -1,4 +1,3 @@
-// const octokit = new Octokit({auth:'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'});
 import { Octokit } from "@octokit/rest";
 const octokit = new Octokit({auth: env.GITHUB_TOKEN});
 const REPO_OWNER = 'AINovelist';
