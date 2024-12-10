@@ -9,11 +9,12 @@
     "test": "vitest"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.5.2",
-    "vitest": "2.0.5",
-    "wrangler": "^3.60.3"
+    "@cloudflare/vitest-pool-workers": "^0.5.35",
+    "vitest": "2.1.8",
+    "wrangler": "^3.94.0"
   },
   "dependencies": {
-    "@octokit/rest": "^21.0.2"
+    "@octokit/rest": "^21.0.2",
+    "npm-check-updates": "^17.1.11"
   }
 }

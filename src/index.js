@@ -132,7 +132,8 @@ export default {
           });
         } else {
           // Load the list of files for the specified topic
-          const files = await listFilesInTopic(topicSlug);
+          const files = await listFilesInTopic(octokit,topicSlug, env);
+          // (octokit, topicSlug, fileName, env)
           return new Response(JSON.stringify(files), {
             headers: {
               'Content-Type': 'application/json',
