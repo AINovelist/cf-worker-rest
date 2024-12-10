@@ -1,33 +1,17 @@
+// const octokit = new Octokit({auth:'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'});
 import { Octokit } from "@octokit/rest";
-
+const octokit = new Octokit({auth: env.GITHUB_TOKEN});
+const REPO_OWNER = 'AINovelist';
+const REPO_NAME = 'stories';
+const ROOT_FOLDER = 'kids';
+const PER_PAGE = 10; // Default pagination limit
 const topicMap = [
-  {
-    name: "Air Pollution Reduction",
-    slug: "air_pollution_reduction",
-    folder: "Air Pollution Reduction",
-  },
-  {
-    name: "Animal Protection",
-    slug: "animal_protection",
-    folder: "Animal Protection",
-  },
-  {
-    name: "Tree Preservation",
-    slug: "tree_preservation",
-    folder: "Tree Preservation",
-  },
-  {
-    name: "Waste Reduction",
-    slug: "waste_reduction",
-    folder: "Waste Reduction",
-  },
-  {
-    name: "Water Conservation",
-    slug: "water_conservation",
-    folder: "Water Conservation",
-  },
+  { name: "Air Pollution Reduction", slug: "air_pollution_reduction", folder: "Air Pollution Reduction" },
+  { name: "Animal Protection", slug: "animal_protection", folder: "Animal Protection" },
+  { name: "Tree Preservation", slug: "tree_preservation", folder: "Tree Preservation" },
+  { name: "Waste Reduction", slug: "waste_reduction", folder: "Waste Reduction" },
+  { name: "Water Conservation", slug: "water_conservation", folder: "Water Conservation" },
 ];
-
 const imageTypes = [
   "3d_rendered",
   "cartoon",
@@ -39,109 +23,138 @@ const imageTypes = [
   "vector_art",
   "watercolor",
 ];
+function generateImageList(fileName) {
+  const baseFileName = fileName.replace('.md', '');
+  return imageTypes.reduce((images, type) => {
+    images[type] = `${baseFileName}-${type}.png`;
+    return images;
+  }, {});
+}
+
+async function listFilesInTopic(topicSlug) {
+  const topic = topicMap.find((t) => t.slug === topicSlug);
+  const folderPath = `${ROOT_FOLDER}/${topic.folder}/fa`;
+  const response = await octokit.repos.getContent({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
+    path: folderPath,
+  });
+
+  return response.data.map((item) => ({
+    name: item.name,
+    type: item.type,
+    download_url: item.download_url,
+    images: generateImageList(item.name),
+  }));
+}
+
+async function getTopics() {
+  return topicMap;
+}
+
+async function getContentByTopicAndFile(topicSlug, fileName) {
+  const topic = topicMap.find((t) => t.slug === topicSlug);
+  const folderPath = `${ROOT_FOLDER}/${topic.folder}/fa/${fileName}.md`;
+  const response = await octokit.repos.getContent({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
+    path: folderPath,
+  });
+
+  const content = atob(response.data.content);
+  const images = generateImageList(fileName);
+
+  return { content, images };
+}
+
+async function searchFiles(keyword) {
+  const response = await octokit.search.code({
+    q: `${keyword} in:file extension:md repo:${REPO_OWNER}/${REPO_NAME}`,
+    per_page: 100, // Increase limit for search results
+  });
+
+  return response.data.items.map((item) => ({
+    name: item.name,
+    path: item.path,
+    download_url: item.html_url.replace('/blob/', '/raw/'),
+  }));
+}
 
 export default {
   async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const { pathname, searchParams } = url;
+
     try {
-      const octokit = new Octokit({
-        auth: env.GITHUB_TOKEN,
-      });
-
-      const url = new URL(request.url);
-      const path = url.pathname.split("/");
-
-      if (path[1] === "topicitems") {
-        // Return the list of topics
-        return new Response(JSON.stringify(topicMap), {
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
-          },
-        });
-      } else if (path[1] === "stories" && path[2] === "topic" && path[3] && path[4]) {
-        // Load the .md file from the specific folder
-        const topicSlug = path[3];
-        const storyId = path[4];
-        const topicData = topicMap.find((topic) => topic.slug === topicSlug);
-
-        if (topicData) {
-          const filesResponse = await octokit.rest.repos.getContent({
-            owner: "AINovelist",
-            repo: "stories",
-            path: `kids/${topicData.folder}/fa/${storyId}.md`,
-            ref: "main",
-          });
-
-          if (Array.isArray(filesResponse.data) && filesResponse.data.length > 0) {
-            const fileContent = atob(filesResponse.data[0].content);
-            return new Response(fileContent, {
-              headers: {
-                "Content-Type": "text/markdown",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Authorization",
-              },
-            });
-          } else {
-            return new Response("File not found", { status: 404 });
-          }
-        } else {
-          return new Response("Topic not found", { status: 404 });
-        }
-      } else {
-        // Return the original response
-        const fileList = [];
-
+      if (pathname === '/') {
+        const files = [];
         for (const topic of topicMap) {
-          const filesResponse = await octokit.rest.repos.getContent({
-            owner: "AINovelist",
-            repo: "stories",
-            path: `kids/${topic.folder}/fa`,
-            ref: "main",
-          });
-
-          console.log(`Files for topic ${topic.name}:`, filesResponse);
-
-          if (Array.isArray(filesResponse.data)) {
-            for (const file of filesResponse.data) {
-              const parts = file.name.split("-");
-              const suffix = parts[parts.length - 1].replace(".md", "");
-              const storyname = file.name.replace(".md", "");
-              const imageMap = {};
-
-              for (const imageType of imageTypes) {
-                imageMap[imageType] = `${storyname}-${imageType}.png`;
-              }
-
-              fileList.push({
-                name: file.name,
-                topic: topic.name,
-                topicSlug: topic.slug,
-                images: imageMap,
-              });
-            }
-          } else {
-            console.error(`Error fetching files for topic ${topic.name}: ${filesResponse.data.message}`);
-          }
+          const topicFiles = await listFilesInTopic(topic.slug);
+          files.push(...topicFiles.map((file) => ({ ...file, topic: topic.name, topicSlug: topic.slug })));
         }
-
-        return new Response(JSON.stringify(fileList), {
+        return new Response(JSON.stringify(files), {
           headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
           },
         });
+      } else if (pathname === '/topic') {
+        const topics = await getTopics();
+        return new Response(JSON.stringify(topics), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          },
+        });
+      } else if (pathname.startsWith('/topic/')) {
+        const parts = pathname.split('/');
+        const topicSlug = parts[2];
+
+        // Check if there's a file name in the path
+        if (parts.length === 4) {
+          const fileName = parts[3];
+          const { content, images } = await getContentByTopicAndFile(topicSlug, fileName);
+          return new Response(JSON.stringify({ content, images }), {
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            },
+          });
+        } else {
+          // Load the list of files for the specified topic
+          const files = await listFilesInTopic(topicSlug);
+          return new Response(JSON.stringify(files), {
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            },
+          });
+        }
+      } else if (pathname.startsWith('/search/')) {
+        const keyword = pathname.split('/')[2];
+        const files = await searchFiles(keyword);
+        return new Response(JSON.stringify(files), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          },
+        });
+      } else {
+        return new Response('Not Found', { status: 404 });
       }
     } catch (error) {
-      console.error('Error fetching GitHub repository files:', error);
-      return new Response('Error fetching GitHub repository files', {
-        status: 500,
-        statusText: error.message,
-      });
+      console.error(error);
+      return new Response('Internal Server Error', { status: 500 });
     }
   },
 };
