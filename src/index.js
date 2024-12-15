@@ -77,9 +77,7 @@ async function listJsonFilesInTopic(octokit, topicSlug, env) {
     owner: REPO_OWNER,
     repo: REPO_NAME,
     path: folderPath,
-    headers: {
-      Authorization: `Bearer ` + env.GITHUB_TOKEN,
-    },
+    auth: env.GITHUB_TOKEN,
   });
 
   const jsonFiles = response.data
@@ -97,9 +95,7 @@ async function listJsonFilesInTopic(octokit, topicSlug, env) {
       owner: REPO_OWNER,
       repo: REPO_NAME,
       path: `${folderPath}/${file.name}`,
-      headers: {
-        Authorization: `Bearer ` + env.GITHUB_TOKEN,
-      },
+      auth: env.GITHUB_TOKEN,
     });
     console.log(atob(fileContentResponse.data.content));
     // Decode the content from base64
