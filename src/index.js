@@ -66,19 +66,23 @@ async function listFilesInTopic(octokit, topicSlug, env) {
 
 async function listJsonFilesInTopic(octokit, topicSlug, env) {
   const topic = topicMap.find((t) => t.slug === topicSlug);
+
   if (!topic) {
     throw new Error(`Topic not found for slug: ${topicSlug}`);
   }
+
   const folderPath = `${ROOT_FOLDER}/${topic.folder}/fa`;
+
   const response = await octokit.repos.getContent({
     owner: REPO_OWNER,
     repo: REPO_NAME,
     path: folderPath,
-    auth: env.GITHUB_TOKEN,
+    headers: {
+      Authorization: `Bearer ` + env.GITHUB_TOKEN,
+    },
   });
 
-  // Filter the list to only include .md files
-  return response.data
+  const jsonFiles = response.data
     .filter((item) => item.name.endsWith('.json')) // Filter for .json files only
     .map((item) => ({
       name: item.name,
@@ -86,6 +90,28 @@ async function listJsonFilesInTopic(octokit, topicSlug, env) {
       download_url: item.download_url,
       images: generatePagesImageList(item.name),
     }));
+
+  // Fetch the content of each .json file and add it to the response
+  for (let file of jsonFiles) {
+    const fileContentResponse = await octokit.repos.getContent({
+      owner: REPO_OWNER,
+      repo: REPO_NAME,
+      path: `${folderPath}/${file.name}`,
+      headers: {
+        Authorization: `Bearer ` + env.GITHUB_TOKEN,
+      },
+    });
+    console.log(atob(fileContentResponse.data.content));
+    // Decode the content from base64
+    const content = JSON.parse(decodeURIComponent(escape(atob(fileContentResponse.data.content))));
+    content.pages = content.pages.map((page) => {
+      const { image_prompt, ...rest } = page;
+      return rest;
+    });
+    file.content = content;
+  }
+
+  return jsonFiles;
 }
 
 async function getTopics(env) {
@@ -143,7 +169,7 @@ export default {
             'Access-Control-Allow-Headers': 'Content-Type, Authorization',
           },
         });
-       } else if (pathname === '/json') {
+       } else if (pathname === '/paged') {
         const files = [];
         for (const topic of topicMap) {
           const topicFiles = await listJsonFilesInTopic(octokit, topic.slug, env);
