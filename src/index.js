@@ -29,6 +29,17 @@ function generateImageList(fileName) {
   }, {});
 }
 
+function generatePagesImageList(fileName) {
+  const baseFileName = fileName.replace('.json', '');
+  return imageTypes.reduce((images, type) => {
+    images[type] = [];
+    for (let i = 1; i <= 5; i++) {
+      images[type].push(`${baseFileName}/${i}-${type}.png`);
+    }
+    return images;
+  }, {});
+}
+
 async function listFilesInTopic(octokit, topicSlug, env) {
   const topic = topicMap.find((t) => t.slug === topicSlug);
   if (!topic) {
@@ -50,6 +61,30 @@ async function listFilesInTopic(octokit, topicSlug, env) {
       type: item.type,
       download_url: item.download_url,
       images: generateImageList(item.name),
+    }));
+}
+
+async function listJsonFilesInTopic(octokit, topicSlug, env) {
+  const topic = topicMap.find((t) => t.slug === topicSlug);
+  if (!topic) {
+    throw new Error(`Topic not found for slug: ${topicSlug}`);
+  }
+  const folderPath = `${ROOT_FOLDER}/${topic.folder}/fa`;
+  const response = await octokit.repos.getContent({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
+    path: folderPath,
+    auth: env.GITHUB_TOKEN,
+  });
+
+  // Filter the list to only include .md files
+  return response.data
+    .filter((item) => item.name.endsWith('.json')) // Filter for .json files only
+    .map((item) => ({
+      name: item.name,
+      type: item.type,
+      download_url: item.download_url,
+      images: generatePagesImageList(item.name),
     }));
 }
 
@@ -108,7 +143,21 @@ export default {
             'Access-Control-Allow-Headers': 'Content-Type, Authorization',
           },
         });
-      } else if (pathname === '/topic') {
+       } else if (pathname === '/json') {
+        const files = [];
+        for (const topic of topicMap) {
+          const topicFiles = await listJsonFilesInTopic(octokit, topic.slug, env);
+          files.push(...topicFiles.map((file) => ({ ...file, topic: topic.name, topicSlug: topic.slug })));
+        }
+        return new Response(JSON.stringify(files), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          },
+        });
+      }else if (pathname === '/topic') {
         const topics = await getTopics();
         return new Response(JSON.stringify(topics), {
           headers: {
