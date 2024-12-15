@@ -32,7 +32,7 @@ function generateImageList(fileName) {
 async function listFilesInTopic(octokit, topicSlug, env) {
   const topic = topicMap.find((t) => t.slug === topicSlug);
   if (!topic) {
-    throw new Error(`Topic not found for slug: ${topic}`);
+    throw new Error(`Topic not found for slug: ${topicSlug}`);
   }
   const folderPath = `${ROOT_FOLDER}/${topic.folder}/fa`;
   const response = await octokit.repos.getContent({
@@ -42,12 +42,15 @@ async function listFilesInTopic(octokit, topicSlug, env) {
     auth: env.GITHUB_TOKEN,
   });
 
-  return response.data.map((item) => ({
-    name: item.name,
-    type: item.type,
-    download_url: item.download_url,
-    images: generateImageList(item.name),
-  }));
+  // Filter the list to only include .md files
+  return response.data
+    .filter((item) => item.name.endsWith('.md')) // Filter for .md files only
+    .map((item) => ({
+      name: item.name,
+      type: item.type,
+      download_url: item.download_url,
+      images: generateImageList(item.name),
+    }));
 }
 
 async function getTopics(env) {
